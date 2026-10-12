@@ -95,3 +95,28 @@ label{display:block;font-size:.875rem;font-weight:550;margin-bottom:var(--s4)}in
 .section-heading,.intro,.timer-bottom{flex-wrap:wrap}
 
 .event-main strong{overflow-wrap:anywhere}
+
+/* The sleep sheet follows the supplied night-time timer reference in every theme. */
+#sheet.sleep-editor{background:#2c303c;color:#f5f3f2;border-radius:12px 12px 0 0;color-scheme:dark;--focus:#d7d3ff;--danger:#ffb4ba}
+#sheet.sleep-editor #sheet-content{padding:0 0 calc(20px + env(safe-area-inset-bottom))}
+.sleep-heading{display:grid;grid-template-columns:64px 1fr 64px;align-items:center;background:#d0d0f0;color:#292d39;min-height:52px;position:sticky;top:0;z-index:2}
+.sleep-heading h2{text-align:center;font:2rem Georgia,serif;letter-spacing:-.03em}
+.sleep-close,.sleep-save{background:none;display:grid;place-items:center;padding:0 12px;min-height:52px;font-size:.9375rem;font-weight:600}
+.sleep-close svg{width:21px;height:21px}
+.sleep-hero{position:relative;text-align:center;padding:38px 16px 26px;overflow:hidden;min-height:234px}
+.sleep-total-label{font:1.25rem Georgia,serif;margin-bottom:12px}
+.sleep-clock{display:flex;align-items:baseline;justify-content:center;gap:5px;position:relative;z-index:1;line-height:1.2}
+.sleep-clock-group{display:inline-flex;align-items:baseline;gap:1px}.sleep-clock-number{font-size:clamp(2.5rem,14vw,4rem);font-weight:250;letter-spacing:-.07em}.sleep-clock small{font:.75rem Georgia,serif}
+.sleep-timer-button{display:block;margin:12px auto 0;background:#ff691f;color:#fff;border-radius:999px;min-height:44px;padding:10px 24px;font-size:1rem;font-weight:650;position:relative;z-index:1}
+.sleep-manual{display:block;margin:6px auto 0;background:none;color:#d0d0e4;font-size:.8125rem;text-decoration:underline;min-height:44px}
+.sleep-doodle{position:absolute;pointer-events:none;color:#fff}.sleep-doodle svg{width:100%;height:100%;stroke-width:1.4}.star-one{left:20px;top:20px;width:36px;height:36px;transform:rotate(-12deg)}.star-two{right:23px;top:21px;width:31px;height:31px;transform:rotate(10deg)}.star-three{right:13px;top:71px;width:30px;height:30px;transform:rotate(18deg)}.moon-doodle{left:25px;bottom:50px;width:52px;height:40px;transform:rotate(-21deg)}
+.sleep-field-row{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;background:none;border-top:1px solid #494e5d;padding:14px 16px;min-height:59px;text-align:left}
+.sleep-field-label,.sleep-notes{font:1.25rem Georgia,serif}.sleep-field-value{font: .9375rem system-ui,sans-serif;text-align:right}
+.sleep-date-editor{margin:0;padding:4px 16px 16px;font-size:.875rem}.sleep-date-editor input{background:#232733;border-color:#555b6d;color:#f5f3f2}
+.sleep-notes{display:block;border-top:1px solid #494e5d;border-bottom:1px solid #494e5d;margin:0;padding:17px 16px 8px}
+.sleep-notes textarea{font:.9375rem system-ui,sans-serif;background:transparent;color:#f5f3f2;border:0;border-radius:4px;padding:8px 0;min-height:38px;height:38px;margin:0;resize:vertical}.sleep-notes textarea::placeholder{color:#b6b9c7;font-size:.8125rem}.sleep-notes textarea:focus{min-height:90px}
+.sleep-photo-area{display:flex;flex-direction:column;align-items:center;padding:14px 16px 0;background:linear-gradient(#252936,#222632)}
+.sleep-add-photo{border:1px solid #606577;border-radius:999px;background:#303542;padding:8px 26px;min-height:44px;font-size:.9375rem;color:#fff}
+.sleep-photo{max-width:100%;max-height:240px;object-fit:contain;border-radius:12px;margin-bottom:12px}.sleep-delete{display:flex;align-items:center;justify-content:center;gap:8px;background:none;color:#ffb4ba;margin:16px auto 0;font-size:.875rem}.sleep-fields>.error{margin:12px 16px}
+@media(max-width:350px){.sleep-hero{padding-left:8px;padding-right:8px}.moon-doodle{left:12px;width:38px}.sleep-field-row{gap:8px;flex-wrap:wrap}}
+.sleep-clock{flex-wrap:wrap;column-gap:8px}.sleep-heading{grid-template-columns:minmax(48px,1fr) auto minmax(64px,1fr)}.sleep-close{justify-self:start}.sleep-save{justify-self:end}

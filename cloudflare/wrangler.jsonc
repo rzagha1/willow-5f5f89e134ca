@@ -1,0 +1,17 @@
+{
+  "name": "eshels-baby-sync",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {
+    "APP_ORIGIN": "https://rzagha1.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "eshels-baby",
+      "database_id": "c6bf38ea-dceb-42ac-a8ff-63917894b198"
+    }
+  ],
+  "account_id": "5a8b57a6673b415bf6b691f8d25cf46e"
+}
