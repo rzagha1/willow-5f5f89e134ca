@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#FFF9F5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15141B" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="A little care, a little calm. Your baby's daily moments, kept on your phone.">
+  <title>Eshels Baby App</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="./icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header id="header"></header>
+    <div id="warnings" class="warnings"></div>
+    <main id="main" tabindex="-1"><div class="empty"><div class="illustration"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.8 14.2A8 8 0 0 1 9.8 4.1a8 8 0 1 0 10 10.1Z M17 3v4m-2-2h4"/></svg></div><h1>A little moment…</h1><p>Getting your baby's day ready.</p></div></main>
+    <nav id="nav" aria-label="Main navigation"></nav>
+  </div>
+  <dialog id="sheet" aria-labelledby="sheet-title"><div id="sheet-content"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <button id="update" class="update" hidden>Update available, tap to refresh</button>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <noscript>This app needs JavaScript to save your baby's moments. Enable JavaScript in Chrome, then reload.</noscript>
+</body>
+</html>
