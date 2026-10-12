@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const TYPES = ['sleep', 'feed', 'diaper', 'misc'];
 const LABELS = {sleep:'Sleep', feed:'Feed', diaper:'Diaper', misc:'Misc'};
 const SCOPE = new URL('./', location.href).pathname;
@@ -208,6 +208,11 @@ function eventTitle(event) {
 }
 function eventDetail(event) {
   const parts = [];
+  if (event.type === 'sleep') {
+    const overnight = dayKey(event.startTime) !== dayKey(event.endTime || iso());
+    const sleepTime = value => (overnight ? new Date(value).toLocaleDateString([], {month:'short',day:'numeric'})+' ' : '')+time(value);
+    parts.push('Start '+sleepTime(event.startTime), 'End '+(event.endTime ? sleepTime(event.endTime) : 'In progress'));
+  }
   if (event.endTime === null) parts.push('Running · '+duration(Date.now()-Date.parse(event.startTime)));
   else if (event.type === 'sleep' || ['left','right'].includes(event.subtype)) parts.push(duration(Date.parse(event.endTime)-Date.parse(event.startTime)));
   if (event.amount !== null) parts.push(`${event.amount} ${event.unit}`);
@@ -316,7 +321,7 @@ function renderTimeline() {
       row.dataset.focusKey='event-'+event.id;
       const body=el('span','event-main'), detail=el('small','',(dayKey(event.startTime)!==key?'Continued · ':'')+eventDetail(event));detail.dataset.eventId=event.id;detail.dataset.continued=String(dayKey(event.startTime)!==key);body.append(el('strong','',eventTitle(event)),detail);
       const side=el('span','event-side'), at=el('time','',time(event.startTime));at.dateTime=event.startTime;
-      const initial=el('span','initial',event.loggedBy.slice(0,1).toLocaleUpperCase());initial.title='Logged by '+event.loggedBy;initial.setAttribute('aria-label','Logged by '+event.loggedBy);side.append(at,initial);row.append(badge,body,side);section.append(row);
+      const initial=el('span','initial',event.loggedBy.slice(0,1).toLocaleUpperCase());initial.title='Logged by '+event.loggedBy;initial.setAttribute('aria-label','Logged by '+event.loggedBy);if(event.type!=='sleep')side.append(at);side.append(initial);row.append(badge,body,side);section.append(row);
     }
     main.append(section);
   }

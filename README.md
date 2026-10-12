@@ -21,7 +21,7 @@ The link contains a secret access key. Anyone with it can read and change your f
 - **Feed:** breast left/right timers, bottle amount and unit, or solids with a note. Expand **Now** to log an earlier time.
 - **Diaper:** Wet, Dirty, or Both saves immediately. Undo is available briefly. **Add details** lets you add a note or an earlier time.
 - **Misc:** choose a quick label or enter your own.
-- **Timeline:** tap an entry to edit or delete it. Sleep spanning midnight appears on each affected day; daily totals include only that day's duration.
+- **Timeline:** tap an entry to edit or delete it. Sleep entries show their start and end times (or In progress), alongside duration and notes. Sleep spanning midnight includes dates and appears on each affected day; daily totals include only that day's duration.
 - **Settings:** names, bottle unit, clock, theme, family connection, backups, and CSV export. Each phone keeps its own preferences.
 
 ## How automatic sync works
