@@ -31,6 +31,8 @@ export default {
       while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>2*1024*1024){await reader.cancel();throw Error('Request too large.');}chunks.push(value);}
       input=JSON.parse(await new Blob(chunks).text());
       if (!Number.isSafeInteger(input.cursor) || input.cursor<0 || !Array.isArray(input.events) || input.events.length>BATCH) throw Error('Invalid sync request.');
+      // Older clients discard pause history when they edit a sleep.
+      if(input.protocol!==2)return reply({error:'Update the app on this phone to keep sleep timers in sync.'},409);
       events=input.events.map(validateEvent);
       if(new Set(events.map(event=>event.id)).size!==events.length)throw Error('Duplicate events.');
     } catch(error) { return reply({error:error.message}, 400); }
@@ -47,6 +49,7 @@ export default {
       const rows=results.at(-1).results;
       const page=rows.slice(0,BATCH);
       return reply({
+        protocol:2,
         cursor:page.at(-1)?.revision ?? input.cursor,
         more:rows.length>BATCH,
         events:page.map(row=>JSON.parse(row.data)),

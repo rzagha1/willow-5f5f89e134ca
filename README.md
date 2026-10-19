@@ -17,7 +17,7 @@ The link contains a secret access key. Anyone with it can read and change your f
 
 ## Daily use
 
-- **Sleep:** the dark sleep sheet follows `simlar.png`: lavender header, large elapsed time, orange Start/Stop Timer button, editable start/end times, notes, and Add Photo. Tap **Save** to save your edits and close. A running timer survives closing or restarting the app. **Manual entry** opens both date/time fields. Photos are resized and saved as JPEGs.
+- **Sleep:** Home shows time since the baby last **woke up**, using the latest sleep end time. Open the soft lavender sleep sheet for a large timer, editable start/end times, notes, and Add Photo. **Pause** freezes the total during a brief wake-up; **Resume** continues the same sleep without resetting. Awake breaks are excluded from the timer, history, and daily totals. **Stop** finishes the sleep; if already paused, the end time is when the pause began. Running and paused timers survive closing, offline use, and restarting the app. Tap **Save** to save edits and close. **Manual entry** opens both date/time fields. Photos are resized and saved as JPEGs. The sheet follows the phone’s selected light/dark theme.
 - **Feed:** breast left/right timers, bottle amount and unit, or solids with a note. Expand **Now** to log an earlier time.
 - **Diaper:** Wet, Dirty, or Both saves immediately. Undo is available briefly. **Add details** lets you add a note or an earlier time.
 - **Misc:** choose a quick label or enter your own.
@@ -26,7 +26,7 @@ The link contains a secret access key. Anyone with it can read and change your f
 
 ## How automatic sync works
 
-Every saved change also enters a durable local queue. When connected, changes are sent shortly after saving; the other phone checks for changes every five seconds while the app is visible. Both mobile data and Wi-Fi work, and the phones can use different networks. Sleep/feed timer starts and stops, notes, photos, and deletions all sync.
+Every saved change also enters a durable local queue. When connected, changes are sent shortly after saving; the other phone checks for changes every five seconds while the app is visible. Both mobile data and Wi-Fi work, and the phones can use different networks. Sleep/feed timer starts and stops, sleep pauses/resumes, notes, photos, and deletions all sync. Both phones must run version 1.2.0 or newer to sync pause history safely.
 
 Offline changes remain saved and queued through reloads. Sync retries after connection failures, when internet returns, and when the app returns to the foreground. Browsers may suspend a background app or stop it completely; opening it again resumes syncing automatically. Continuous syncing while force-closed is not supported.
 
@@ -36,7 +36,7 @@ Each entry has a stable ID. Different entries merge without duplicates. Edits to
 
 **Download backup** saves events, photos, deletion markers, and preferences as JSON. Keep a copy somewhere separate from the phone. **Restore backup** validates the file before showing a confirmation. On a connected phone it merges entries into the family, keeping later edits/deletions, and restores preferences. On an unconnected phone it replaces local entries/preferences. Cancel changes nothing.
 
-**Export CSV** provides spreadsheet-friendly event fields, UTC timestamps, and deletion flags. Photos are included in JSON backups, not CSV. CSV cannot be restored. Spreadsheet formula prefixes are neutralized. A reminder appears after seven days without requesting a backup or CSV export; check that the file actually reached Downloads.
+**Export CSV** provides spreadsheet-friendly event fields, UTC timestamps, deletion flags, sleep pause intervals, and actual sleep seconds. Photos are included in JSON backups, not CSV. CSV cannot be restored. Spreadsheet formula prefixes are neutralized. A reminder appears after seven days without requesting a backup or CSV export; check that the file actually reached Downloads.
 
 Browser storage can be cleared by the user or operating system. IndexedDB is primary; localStorage is a fallback. A failed save reports an error. Synced entries remain on Cloudflare, but entries that have not yet synced need the original phone's local storage or a backup.
 
@@ -67,8 +67,9 @@ References: [D1 prepared statements and transactions](https://developers.cloudfl
 ## Ship an app update
 
 1. Run the relevant checks below. Update `VERSION` in `app.js` and `CACHE_VERSION` in `sw.js` together.
-2. Upload the changed hosting files and `sw.js` to the existing repository's `main` branch. GitHub Pages stays set to `main` / root. Never upload baby data, family keys, OAuth credentials, or `.dev.vars`.
-3. After Pages publishes, open the installed app online and tap **Update available, tap to refresh**. The app reloads; local entries, preferences, pairing, and queued changes remain.
+2. For **1.2.0**, first deploy the updated Worker with `npm run deploy --prefix cloudflare`. Its shared event validator preserves pause intervals. Sync protocol 2 rejects older clients before they can overwrite pause history; local entries stay saved until the phone is updated. No D1 schema migration is needed.
+3. Upload the changed hosting files and `sw.js` to the existing repository's `main` branch. GitHub Pages stays set to `main` / root. Never upload baby data, family keys, OAuth credentials, or `.dev.vars`.
+4. After Pages publishes, open the installed app online **on both phones** and tap **Update available, tap to refresh**. The app reloads; local entries, preferences, pairing, and queued changes remain.
 
 The first automatic-sync release is **1.1.0**, upgrading the original offline release **1.0.0** without changing the URL or local database name. Backend changes deploy separately with Wrangler.
 
@@ -78,18 +79,19 @@ The first automatic-sync release is **1.1.0**, upgrading the original offline re
 python3 -m http.server 8765 --bind 127.0.0.1
 node tests/browser.cjs
 node tests/edge-cases.cjs
+node tests/sleep-timing.cjs
 npm ci --prefix cloudflare
 node tests/automatic-sync.cjs
 ```
 
 Open `http://127.0.0.1:8765/`. The browser tests use an already installed Playwright. The automatic-sync test creates a disposable local D1 database, starts Wrangler's actual Worker runtime, serves an isolated copy of the app, and links two independent browser stores using a test-only key. It never uses the production family/database. These are development tools; the phone app has no Node/npm requirement.
 
-Checks cover all logging types; sleep timer/edit/photo controls; themes; responsive sheets and large text; Back/Escape/focus behavior; backup/CSV/restore; legacy import validation; midnight/DST; offline reload; service-worker updates retaining data; storage fallback/failures; automatic two-phone updates; offline queue replay; simultaneous edits; deletions; pagination; request retries; authentication and CORS. Screenshots are in `artifacts/`.
+Checks cover wake-based gaps; repeated pauses/resumes; stop-while-paused end times; pause history in daily totals, backups, CSV, and two-phone sync; old-client rejection; all logging types; sleep timer/edit/photo controls; themes; responsive sheets and large text; Back/Escape/focus behavior; backup/CSV/restore; legacy import validation; midnight/DST; offline reload; service-worker updates retaining data; storage fallback/failures; automatic two-phone updates; offline queue replay; simultaneous edits; deletions; pagination; request retries; authentication and CORS. Screenshots are in `artifacts/`.
 
 ## Physical phone checks
 
 - Open the private link on both phones and install the app. Confirm the connected status.
-- Leave one phone on mobile data and the other on Wi-Fi. Start a sleep on one, then stop it on the other.
+- Leave one phone on mobile data and the other on Wi-Fi. Start a sleep on one, pause it on the other, resume it on the first, then stop it on the other. Confirm the same accumulated sleep time on both.
 - Add/edit notes and a photo, and delete an entry. Confirm both phones agree within a few seconds.
 - Use airplane mode to log entries, close/reopen the app, then reconnect. Confirm automatic merging.
 - Check native installation/sharing, TalkBack, vibration, large system text, and a force-close/reopen while a timer runs.

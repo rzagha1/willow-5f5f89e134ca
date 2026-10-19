@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const TYPES = ['sleep', 'feed', 'diaper', 'misc'];
 const LABELS = {sleep:'Sleep', feed:'Feed', diaper:'Diaper', misc:'Misc'};
 const SCOPE = new URL('./', location.href).pathname;
@@ -10,6 +10,8 @@ const iso = () => new Date().toISOString();
 const paths = {
   sleep:'M19.8 14.2A8 8 0 0 1 9.8 4.1a8 8 0 1 0 10 10.1Z M17 3v4m-2-2h4',
   mask:'M4 8c4-3 12-3 16 0v7c-1 4-5 3-8 0-3 3-7 4-8 0Z M4 9C-1 6 0 2 5 4c5-3 10-3 14 0 5-2 6 2 1 5 M7 10v2m-2 0 2 1 2-1 M17 10v2m-2 0 2 1 2-1',
+  sun:'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5',
+  pause:'M8 5v14M16 5v14', play:'m8 5 11 7-11 7Z', stop:'M6 6h12v12H6Z',
   feed:'m9 3 4 1-1 3 3 2 3 8a3 3 0 0 1-2 4l-4 1a3 3 0 0 1-4-2L5 12l1-4 3-1 1-3 M6 11l9-3 M8 14l3-1 M9 17l3-1',
   diaper:'M12 3c-2 4-7 8-7 12a7 7 0 0 0 14 0c0-4-5-8-7-12Z M8 15a4 4 0 0 0 3 4',
   misc:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z',
@@ -40,8 +42,7 @@ function button(text, className, fn, symbol) {
   if (text) node.append(document.createTextNode(text));
   if (fn) node.addEventListener('click', async () => {
     if (node.disabled) return;
-    node.disabled = true;
-    try { await fn(); } catch (error) { report(error); }
+    try { const result=fn();if(result?.then){node.disabled=true;await result;} } catch (error) { report(error); }
     finally { node.disabled = false; }
   });
   return node;
@@ -60,7 +61,7 @@ function selectField(label, choices, value) {
 }
 function vibrate() { navigator.vibrate?.(10); }
 function fail(message) { throw new Error(message); }
-let string, timestamp, validateEvent, mergeEvents;
+let string, timestamp, validateEvent, mergeEvents, sleepPaused, timerDuration, lastWakeTime, finishTimer;
 function validateSettings(raw) {
   if (!raw || typeof raw !== 'object') fail('Backup settings are missing.');
   if (!['oz','ml'].includes(raw.bottleUnit) || !['12h','24h'].includes(raw.clock) || !['auto','light','dark'].includes(raw.theme)) fail('Backup settings are invalid.');
@@ -161,7 +162,7 @@ async function stopTimer(id) {
   await commit(data => {
     const event = data.events.find(e => e.id === id);
     if (!event || event.deleted || event.endTime !== null) return;
-    event.endTime = new Date(Math.max(Date.now(), Date.parse(event.startTime))).toISOString(); event.updatedAt = updated(event);
+    data.events[data.events.indexOf(event)] = validateEvent({...finishTimer(event),updatedAt:updated(event)});
   });
   vibrate(); notify('Timer saved. A little rest, remembered.');
 }
@@ -192,8 +193,8 @@ function totals(date, events = activeEvents(), now = Date.now()) {
   let sleep = 0, feeds = 0, wet = 0, dirty = 0;
   for (const event of events) {
     if (event.deleted) continue;
-    const a = Date.parse(event.startTime), b = event.endTime ? Date.parse(event.endTime) : now;
-    if (event.type === 'sleep') sleep += Math.max(0, Math.min(b,end,now)-Math.max(a,start));
+    const a = Date.parse(event.startTime);
+    if (event.type === 'sleep') sleep += timerDuration(event,now,start,end);
     if (a < start || a >= end) continue;
     if (event.type === 'feed') feeds++;
     if (event.type === 'diaper') { if (['wet','both'].includes(event.subtype)) wet++; if (['dirty','both'].includes(event.subtype)) dirty++; }
@@ -211,10 +212,11 @@ function eventDetail(event) {
   if (event.type === 'sleep') {
     const overnight = dayKey(event.startTime) !== dayKey(event.endTime || iso());
     const sleepTime = value => (overnight ? new Date(value).toLocaleDateString([], {month:'short',day:'numeric'})+' ' : '')+time(value);
-    parts.push('Start '+sleepTime(event.startTime), 'End '+(event.endTime ? sleepTime(event.endTime) : 'In progress'));
+    parts.push('Start '+sleepTime(event.startTime), 'End '+(event.endTime ? sleepTime(event.endTime) : sleepPaused(event)?'Paused':'In progress'));
   }
-  if (event.endTime === null) parts.push('Running · '+duration(Date.now()-Date.parse(event.startTime)));
-  else if (event.type === 'sleep' || ['left','right'].includes(event.subtype)) parts.push(duration(Date.parse(event.endTime)-Date.parse(event.startTime)));
+  if (event.endTime === null) parts.push((sleepPaused(event)?'Paused':'Running')+' · '+duration(timerDuration(event)));
+  else if (event.type === 'sleep' || ['left','right'].includes(event.subtype)) parts.push(duration(timerDuration(event)));
+  if(event.pauses?.length)parts.push('Awake breaks excluded');
   if (event.amount !== null) parts.push(`${event.amount} ${event.unit}`);
   if (event.note) parts.push(event.note);
   return parts.join(' · ') || LABELS[event.type];
@@ -275,10 +277,16 @@ function renderWelcome() {
 function renderHome() {
   $('#nav').hidden=false;
   const events=activeEvents();
+  if(!events.some(event=>event.type==='sleep'&&event.endTime===null)){
+    const wake=el('section','wake-card'), art=el('span','wake-art');art.append(icon('sun'));
+    const words=el('div','wake-words');words.append(el('p','eyebrow','Little waking moments'));
+    const elapsed=el('h2','numeric');elapsed.dataset.awake='';const detail=el('p','wake-detail');detail.dataset.wakeDetail='';words.append(elapsed,detail);wake.append(words,art);main.append(wake);
+  }
   for (const event of events.filter(e=>e.endTime===null)) {
-    const banner=el('section','timer '+event.type), top=el('div','timer-top');top.append(icon(event.type),el('span','',eventTitle(event)+' in progress'));
-    const bottom=el('div','timer-bottom'), elapsed=el('strong','elapsed numeric',duration(Date.now()-Date.parse(event.startTime),true));elapsed.dataset.timer=event.startTime;
-    bottom.append(elapsed,button('Stop','',()=>stopTimer(event.id)));banner.append(top,bottom);main.append(banner);
+    const banner=el('section','timer '+event.type), top=el('div','timer-top');top.append(icon(sleepPaused(event)?'sun':event.type),el('span','',sleepPaused(event)?'A little awake break':eventTitle(event)+' in progress'));
+    const bottom=el('div','timer-bottom'), elapsed=el('strong','elapsed numeric',duration(timerDuration(event),true));elapsed.dataset.timerId=event.id;
+    const actions=el('div','timer-actions');if(event.type==='sleep')actions.append(button('Open timer','timer-open',()=>openSleep(state.events.find(e=>e.id===event.id))));actions.append(button('Stop','',()=>stopTimer(event.id)));
+    bottom.append(elapsed,actions);banner.append(top,bottom);if(sleepPaused(event))banner.append(el('p','timer-hint','Paused. Resume whenever those little eyes close.'));main.append(banner);
   }
   const intro=el('div','intro');intro.append(el('h2','','A moment to remember'),el('span','eyebrow','Quick log'));main.append(intro);
   const tiles=el('div','tiles');
@@ -329,12 +337,19 @@ function renderTimeline() {
 function tick() {
   sleepEditor?.tick();
   for(const node of document.querySelectorAll('[data-timer]')) node.textContent=duration(Date.now()-Date.parse(node.dataset.timer),true);
+  for(const node of document.querySelectorAll('[data-timer-id]')){const event=state.events.find(e=>e.id===node.dataset.timerId);if(event)node.textContent=duration(timerDuration(event),true);}
   if(screen==='timeline'){const events=activeEvents(),map=new Map(events.map(e=>[e.id,e]));for(const node of document.querySelectorAll('[data-day]')){const total=totals(node.dataset.day,events);node.textContent=`${duration(total.sleep)} sleep · ${total.feeds} feeds · ${total.wet} wet / ${total.dirty} dirty`;}for(const node of document.querySelectorAll('[data-event-id]')){const event=map.get(node.dataset.eventId);if(event)node.textContent=(node.dataset.continued==='true'?'Continued · ':'')+eventDetail(event);}}
   if(screen!=='home')return;
   const events=activeEvents(), total=totals(new Date(),events), lastFeed=events.find(e=>e.type==='feed');
   const values={sleep:duration(total.sleep),feeds:String(total.feeds),diapers:`${total.wet} / ${total.dirty}`,since:lastFeed?duration(Date.now()-Date.parse(lastFeed.startTime)):'—'};
   for(const node of document.querySelectorAll('[data-stat]'))node.textContent=values[node.dataset.stat];
-  for(const node of document.querySelectorAll('[data-last]')){const event=events.find(e=>e.type===node.dataset.last);node.textContent=event?'Last: '+ago(event.startTime):'No entries yet.';}
+  const wake=lastWakeTime(events), currentSleep=events.find(e=>e.type==='sleep'&&e.endTime===null);
+  for(const node of document.querySelectorAll('[data-awake]'))node.textContent=wake?'Awake for '+duration(Date.now()-Date.parse(wake)):'Ready for a little dream?';
+  for(const node of document.querySelectorAll('[data-wake-detail]'))node.textContent=wake?'Woke '+sleepTimeLabel(wake).toLowerCase():'Log a sleep to see time since waking.';
+  for(const node of document.querySelectorAll('[data-last]')){
+    const event=events.find(e=>e.type===node.dataset.last);
+    node.textContent=node.dataset.last==='sleep'?(currentSleep?(sleepPaused(currentSleep)?'Paused · tap to resume':'Sleeping now'):wake?'Woke '+ago(wake):'No sleeps yet'):event?'Last: '+ago(event.startTime):'No entries yet.';
+  }
 }
 function navigate(name) {
   if(screen===name)return;
@@ -387,8 +402,8 @@ async function sleepPhoto(file) {
 }
 function openSleep(selected) {
   let original=selected || activeEvents().find(event=>event.type==='sleep'&&event.endTime===null);
-  let draft={type:'sleep',subtype:'sleep',startTime:original?.startTime || iso(),endTime:original?.endTime ?? null,amount:null,unit:'',note:original?.note || '',photo:original?.photo || ''};
-  let dirty=false,startChanged=false;
+  let draft={type:'sleep',subtype:'sleep',startTime:original?.startTime || iso(),endTime:original?.endTime ?? null,amount:null,unit:'',note:original?.note || '',photo:original?.photo || '',pauses:structuredClone(original?.pauses || [])};
+  let dirty=false,startChanged=false,saving=false;
   const content=openSheet('Sleep','sleep sleep-editor');
   content.replaceChildren();
   const heading=el('div','sleep-heading'),close=button('','sleep-close',closeSheet,'close');close.setAttribute('aria-label','Close sheet');
@@ -396,17 +411,19 @@ function openSleep(selected) {
   const save=button('Save','sleep-save',async()=>{await persist();closeSheet();notify('Sleep saved.');});
   heading.append(close,title,save);content.append(heading);
   const hero=el('section','sleep-hero');
-  for(const [name,position] of [['misc','star-one'],['misc','star-two'],['misc','star-three'],['mask','moon-doodle']]){const doodle=el('span','sleep-doodle '+position);doodle.append(icon(name));hero.append(doodle);}
-  hero.append(el('p','sleep-total-label','Total Time'));
+  for(const [name,position] of [['misc','star-one'],['misc','star-two'],['misc','star-three']]){const doodle=el('span','sleep-doodle '+position);doodle.append(icon(name));hero.append(doodle);}
+  const moon=el('div','sleep-moon');moon.append(icon('mask'));hero.append(moon);
+  const status=el('p','sleep-status');status.setAttribute('role','status');hero.append(status,el('p','sleep-total-label','Time asleep'));
   const clock=el('div','sleep-clock numeric');clock.setAttribute('role','timer');clock.setAttribute('aria-label','Sleep duration');
   const digits={};for(const [part,unit] of [['hours','h'],['minutes','m'],['seconds','s']]){const group=el('span','sleep-clock-group'),number=el('span','sleep-clock-number','00');digits[part]=number;group.append(number,el('small','',unit));clock.append(group);}
   hero.append(clock);
-  const action=button('Start Timer','sleep-timer-button',async()=>{
-    if(original?.endTime===null && !draft.endTime){draft.endTime=new Date(Math.max(Date.now(),Date.parse(draft.startTime))).toISOString();end.input.value=localInput(draft.endTime);end.wrap.hidden=true;}
-    await persist();refresh();
-  });
+  const action=button('Start Timer','sleep-timer-button',async()=>{await persist(original?.endTime===null&&!draft.endTime?'stop':'save');refresh();});
+  const pause=button('Pause Timer','sleep-pause-button',async()=>{await persist(sleepPaused(draft)?'resume':'pause');refresh();});
+  const controls=el('div','sleep-controls');controls.append(pause,action);
+  const hint=el('p','sleep-hint');hint.id='sleep-timer-hint';pause.setAttribute('aria-describedby',hint.id);
+  const wakeGap=el('p','sleep-wake-gap');
   const manual=button('Manual entry','sleep-manual',()=>{start.wrap.hidden=false;end.wrap.hidden=false;start.input.focus();});
-  hero.append(action,manual);content.append(hero);
+  hero.append(hint,controls,wakeGap,manual);content.append(hero);
   const form=el('div','sleep-fields');content.append(form);
   const start=field('Start date and time','datetime-local',localInput(draft.startTime));
   const end=field('End date and time','datetime-local',localInput(draft.endTime || iso()));
@@ -426,15 +443,42 @@ function openSleep(selected) {
   picker.addEventListener('change',async()=>{if(!picker.files[0])return;addPhoto.disabled=true;try{draft.photo=await sleepPhoto(picker.files[0]);dirty=true;refresh();}catch(error){report(error);}finally{addPhoto.disabled=false;picker.value='';}});
   photoArea.append(photoPreview,addPhoto,removePhoto,picker);form.append(photoArea);formError(form);
   if(original)form.append(button('Delete entry','sleep-delete',async()=>{if(confirm('Delete this sleep? This deletion will also sync to your other phone.')){await deleteEvent(original.id);closeSheet();notify('Sleep deleted.');}},'trash'));
-  async function persist(){
-    if(!start.wrap.hidden)draft.startTime=fromInput(start.input.value,original?.startTime);
-    if(!end.wrap.hidden)draft.endTime=fromInput(end.input.value,original?.endTime);
-    if(!original && draft.endTime===null && !startChanged && start.wrap.hidden)draft.startTime=iso();
-    original=await saveEvent(draft,original);draft={...original};dirty=false;start.input.value=localInput(draft.startTime);end.input.value=localInput(draft.endTime || iso());
+  async function persist(command='save'){
+    if(saving)return;
+    saving=true;save.disabled=action.disabled=pause.disabled=true;
+    try{
+      let values=structuredClone(draft);
+      if(!start.wrap.hidden)values.startTime=fromInput(start.input.value,original?.startTime);
+      if(!end.wrap.hidden)values.endTime=fromInput(end.input.value,original?.endTime);
+      if(!original && values.endTime===null && !startChanged && start.wrap.hidden)values.startTime=iso();
+      if(command==='stop')values=finishTimer({...values,endTime:null});
+      else if(command==='pause'||command==='resume'){
+        if(values.endTime!==null)fail('Save your end time or clear the end-time edit before pausing.');
+        values.pauses ||= [];
+        const at=new Date(Math.max(Date.now(),Date.parse(values.pauses.at(-1)?.endTime || values.pauses.at(-1)?.startTime || values.startTime))).toISOString();
+        if(command==='resume')values.pauses.at(-1).endTime=at;
+        else values.pauses.push({startTime:at,endTime:null});
+      }else if(values.endTime!==null&&values.pauses?.at(-1)?.endTime===null){
+        // An explicit end-time edit replaces the final wake-up time.
+        values.pauses.pop();
+      }
+      original=await saveEvent(values,original);draft=structuredClone(original);dirty=false;
+      start.input.value=localInput(draft.startTime);end.input.value=localInput(draft.endTime || iso());
+      form.querySelector('.error').textContent='';
+      if(command==='stop')end.wrap.hidden=true;
+    }finally{saving=false;save.disabled=action.disabled=pause.disabled=false;}
   }
   function refresh(){
+    const active=!!original&&draft.endTime===null, paused=sleepPaused(draft);
     startValue.textContent=sleepTimeLabel(draft.startTime);endValue.textContent=sleepTimeLabel(draft.endTime);
-    action.textContent=original?.endTime===null&&!draft.endTime?'Stop Timer':draft.endTime?'Save sleep':'Start Timer';
+    action.replaceChildren(icon(active?'stop':draft.endTime?'check':'play'),document.createTextNode(active?'Stop':draft.endTime?'Save sleep':'Start Timer'));
+    action.setAttribute('aria-label',active?'Stop Timer':draft.endTime?'Save sleep':'Start Timer');
+    action.classList.toggle('sleep-stop',active);pause.hidden=!active;
+    pause.replaceChildren(icon(paused?'play':'pause'),document.createTextNode(paused?'Resume':'Pause'));
+    pause.setAttribute('aria-label',paused?'Resume Timer':'Pause Timer');
+    hero.classList.toggle('is-paused',!!paused);
+    status.textContent=paused?'A little awake break':active?'Dreamland, here we are':draft.endTime?'A little rest, remembered':'Let the little dreams begin';
+    hint.textContent=paused?'Time is saved. Resume when baby drifts off again.':active?'A brief wake-up? Pause, then resume this sleep.':draft.endTime?'Awake breaks are left out of the sleep total.':'Get comfy. We’ll keep time for you.';
     manual.hidden=!!original || !!draft.endTime;
     photoPreview.hidden=!draft.photo;if(draft.photo)photoPreview.src=draft.photo;else photoPreview.removeAttribute('src');
     addPhoto.textContent=draft.photo?'Change Photo':'Add Photo';removePhoto.hidden=!draft.photo;
@@ -442,9 +486,11 @@ function openSleep(selected) {
   }
   function updateClock(){
     const current=original&&state.events.find(event=>event.id===original.id);
-    if(current&&current.updatedAt!==original.updatedAt&&!dirty){if(current.deleted){closeSheet();return;}original={...current};draft={...current};note.input.value=draft.note;start.input.value=localInput(draft.startTime);end.input.value=localInput(draft.endTime || iso());refresh();return;}
-    const elapsed=draft.endTime?Date.parse(draft.endTime)-Date.parse(draft.startTime):original?Date.now()-Date.parse(draft.startTime):0;
+    if(current&&current.updatedAt!==original.updatedAt&&!dirty&&!saving){if(current.deleted){closeSheet();return;}original={...current};draft=structuredClone(current);note.input.value=draft.note;start.input.value=localInput(draft.startTime);end.input.value=localInput(draft.endTime || iso());refresh();return;}
+    const elapsed=original||draft.endTime?timerDuration(draft):0;
     const total=Math.max(0,Math.floor(elapsed/1000));digits.hours.textContent=String(Math.floor(total/3600));digits.minutes.textContent=String(Math.floor(total%3600/60)).padStart(2,'0');digits.seconds.textContent=String(total%60).padStart(2,'0');
+    const before=original||draft.endTime||startChanged?Date.parse(draft.startTime):Date.now(), wake=lastWakeTime(activeEvents(),before,original?.id);
+    wakeGap.textContent=wake?(original||draft.endTime||startChanged?'Awake before this sleep · ':'Since last wake-up · ')+duration(before-Date.parse(wake)):'Every little rest counts.';
   }
   sleepEditor={tick:updateClock};refresh();
 }
@@ -545,8 +591,8 @@ function csvCell(value) {
   return '"'+text.replaceAll('"','""')+'"';
 }
 async function exportCSV() {
-  const keys=['id','type','subtype','startTime','endTime','amount','unit','note','loggedBy','createdAt','updatedAt','deleted'];
-  const rows=[keys.join(','),...state.events.map(event=>keys.map(key=>csvCell(event[key])).join(','))];
+  const keys=['id','type','subtype','startTime','endTime','amount','unit','note','loggedBy','createdAt','updatedAt','deleted','pauses','sleepSeconds'];
+  const rows=[keys.join(','),...state.events.map(event=>keys.map(key=>csvCell(key==='pauses'?JSON.stringify(event.pauses || []):key==='sleepSeconds'?(event.type==='sleep'?Math.floor(timerDuration(event)/1000):''):event[key])).join(','))];
   download(new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),filename('export','csv'));
   await commit(data=>{data.settings.lastBackupAt=iso();});notify('CSV downloaded. Use a JSON backup to restore entries.');
 }
@@ -629,7 +675,7 @@ async function setupWorker() {
 }
 async function boot() {
   try{
-    ({string,timestamp,validateEvent,mergeEvents}=await import('./event-data.js'));
+    ({string,timestamp,validateEvent,mergeEvents,sleepPaused,timerDuration,lastWakeTime,finishTimer}=await import('./event-data.js'));
     try{db=await openDB();}catch(error){if(error.name==='BlockedError')throw error;fallback=true;}
     await healthCheck();const existing=await readState();
     if(existing){state={events:existing.events.map(validateEvent),settings:validateSettings(existing.settings),firstRunAt:timestamp(existing.firstRunAt),...(existing.sync?{sync:existing.sync}:{})};}

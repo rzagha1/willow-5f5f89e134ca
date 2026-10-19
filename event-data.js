@@ -27,7 +27,44 @@ function validateEvent(raw) {
   if(photo && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo))fail('An attached photo is invalid.');
   const createdAt = timestamp(raw.createdAt), updatedAt = timestamp(raw.updatedAt);
   if (Date.parse(updatedAt) < Date.parse(createdAt)) fail('An update date is before its creation date.');
-  return {id, type:raw.type, subtype, startTime, endTime, amount:raw.amount, unit, note:string(raw.note, 2000), loggedBy:string(raw.loggedBy, 60, true), createdAt, updatedAt, deleted:raw.deleted, ...(photo?{photo}:{})};
+  const pauses=[];
+  if(raw.pauses!==undefined){
+    if(raw.type!=='sleep'||!Array.isArray(raw.pauses)||raw.pauses.length>1000)fail('Sleep pauses are invalid.');
+    let previous=Date.parse(startTime);
+    for(const [index,pause] of raw.pauses.entries()){
+      if(!pause||typeof pause!=='object')fail('A sleep pause is invalid.');
+      const start=timestamp(pause.startTime), end=timestamp(pause.endTime,true);
+      if(Date.parse(start)<previous || (end!==null&&Date.parse(end)<Date.parse(start)))fail('Sleep pauses must be in order and cannot overlap.');
+      if(end===null&&(endTime!==null||index!==raw.pauses.length-1))fail('Only the last pause of an unfinished sleep can be open.');
+      if(endTime!==null&&Date.parse(end)>Date.parse(endTime))fail('Sleep times must include every pause.');
+      pauses.push({startTime:start,endTime:end});previous=Date.parse(end);
+    }
+  }
+  return {id, type:raw.type, subtype, startTime, endTime, amount:raw.amount, unit, note:string(raw.note, 2000), loggedBy:string(raw.loggedBy, 60, true), createdAt, updatedAt, deleted:raw.deleted, ...(photo?{photo}:{}), ...(pauses.length?{pauses}:{})};
+}
+
+export function sleepPaused(event) { return event.type==='sleep'&&event.endTime===null&&event.pauses?.at(-1)?.endTime===null; }
+export function timerDuration(event, now=Date.now(), from=-Infinity, until=Infinity) {
+  const start=Math.max(Date.parse(event.startTime),from), end=Math.min(event.endTime?Date.parse(event.endTime):now,until,now);
+  let elapsed=Math.max(0,end-start);
+  for(const pause of event.pauses || [])elapsed-=Math.max(0,Math.min(pause.endTime?Date.parse(pause.endTime):now,end)-Math.max(Date.parse(pause.startTime),start));
+  return Math.max(0,elapsed);
+}
+export function lastWakeTime(events, before=Date.now(), excludeId) {
+  let latest=null;
+  for(const event of events){
+    if(event.deleted||event.type!=='sleep'||event.id===excludeId)continue;
+    const wake=sleepPaused(event)?event.pauses.at(-1).startTime:event.endTime;
+    if(wake&&Date.parse(wake)<=before&&(!latest||Date.parse(wake)>Date.parse(latest)))latest=wake;
+  }
+  return latest;
+}
+export function finishTimer(event, now=Date.now()) {
+  const paused=sleepPaused(event);
+  const endTime=paused?event.pauses.at(-1).startTime:new Date(Math.max(now,Date.parse(event.pauses?.at(-1)?.endTime || event.startTime))).toISOString();
+  const result={...event,endTime};
+  if(paused){result.pauses=event.pauses.slice(0,-1);if(!result.pauses.length)delete result.pauses;}
+  return result;
 }
 function mergeEvents(local, incoming) {
   const map = new Map(local.map(event => [event.id, event]));

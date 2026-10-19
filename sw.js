@@ -1,6 +1,6 @@
 'use strict';
 importScripts('./sync-config.js');
-const CACHE_VERSION = '1.1.1';
+const CACHE_VERSION = '1.2.0';
 const CACHE_PREFIX = `eshels-baby-${self.registration.scope}-`;
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const FILES = ['./', './index.html', './styles.css', './app.js', './event-data.js', './sync-config.js', './sync.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-512-maskable.png'];

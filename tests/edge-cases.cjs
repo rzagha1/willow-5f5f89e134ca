@@ -4,12 +4,12 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 (async()=>{
- let release='1.1.1';const requests=[];
+ let release='1.2.0';const requests=[];
  const files=['index.html','app.js','styles.css','manifest.json','sw.js','sync-config.js','sync.js','event-data.js','icon-192.png','icon-512.png','icon-512-maskable.png'];
  const server=http.createServer((req,res)=>{
   requests.push(req.url);const name=req.url.split('?')[0].replace(/^\/nested\//,'')||'index.html';
   if(!files.includes(name)){res.writeHead(404);res.end();return;}
-  let data=fs.readFileSync(path.join(__dirname,'..',name));if(name.endsWith('.js'))data=data.toString().replace("'1.1.1'",`'${release}'`);
+  let data=fs.readFileSync(path.join(__dirname,'..',name));if(name.endsWith('.js'))data=data.toString().replace("'1.2.0'",`'${release}'`);
   res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':name.endsWith('.json')?'application/json':name.endsWith('.png')?'image/png':'text/html');res.end(data);
  });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}/nested/`;
  const browser=await chromium.launch({headless:true});
@@ -38,8 +38,8 @@ const path = require('node:path');
   let rejected=false;try{fromInput('2026-03-08T02:30');}catch{rejected=true;}if(!rejected)throw Error('Nonexistent DST time accepted');
   const tooLarge=new Blob(['x'.repeat(LIMIT+1)]);let bomb=false;try{await boundedBytes(tooLarge.stream());}catch{bomb=true;}if(!bomb)throw Error('Oversized stream accepted');
  });
- release='1.1.2';await page.evaluate(async()=>{const reg=await navigator.serviceWorker.getRegistration();await reg.update();});await page.waitForSelector('#update:not([hidden])');await page.getByRole('button',{name:'Update available, tap to refresh'}).click();await page.waitForFunction(()=>VERSION==='1.1.2');await page.waitForSelector('.tiles');assert.equal(await page.evaluate(()=>state.events.length),1);
- const cachesAfter=await page.evaluate(()=>caches.keys());assert.equal(cachesAfter.length,1);assert.ok(cachesAfter[0].endsWith('1.1.2'));
+ release='1.2.1';await page.evaluate(async()=>{const reg=await navigator.serviceWorker.getRegistration();await reg.update();});await page.waitForSelector('#update:not([hidden])');await page.getByRole('button',{name:'Update available, tap to refresh'}).click();await page.waitForFunction(()=>VERSION==='1.2.1');await page.waitForSelector('.tiles');assert.equal(await page.evaluate(()=>state.events.length),1);
+ const cachesAfter=await page.evaluate(()=>caches.keys());assert.equal(cachesAfter.length,1);assert.ok(cachesAfter[0].endsWith('1.2.1'));
  await ctx.setOffline(true);await page.reload();await page.waitForSelector('.tiles');await page.evaluate(()=>openLog('sleep'));await page.getByRole('button',{name:'Start Timer',exact:true}).click();await page.getByRole('button',{name:'Close sheet'}).click();await page.waitForFunction(()=>!document.querySelector('#sheet').open);await page.reload();await page.waitForSelector('.timer');assert.equal(await page.evaluate(()=>state.events.filter(e=>e.endTime===null).length),1);
  await page.screenshot({path:'artifacts/running-timer.png',fullPage:true});
  const fallback=await init();await fallback.page.addInitScript(()=>Object.defineProperty(window,'indexedDB',{value:undefined}));await onboard(fallback.page);assert.equal(await fallback.page.evaluate(()=>window.localStorage.getItem(DB_NAME)!==null),true);await fallback.page.reload();await fallback.page.waitForSelector('.tiles');assert.match(await fallback.page.locator('#warnings').innerText(),/basic phone storage/);

@@ -18,10 +18,11 @@ async function syncRequest(key, cursor, events) {
   if(!SYNC_URL)fail('The family sync service is not set up yet.');
   const response=await fetch(SYNC_URL+'/sync',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-    body:JSON.stringify({cursor,events}),cache:'no-store',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(20000)
+    body:JSON.stringify({protocol:2,cursor,events}),cache:'no-store',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(20000)
   });
   const raw=await response.json();
   if(!response.ok)fail(raw.error || 'Could not connect to family sync.');
+  if(raw.protocol!==2)fail('Sleep sync needs an update. Your changes are saved on this phone.');
   if(!Number.isSafeInteger(raw.cursor)||raw.cursor<cursor||typeof raw.more!=='boolean'||!Array.isArray(raw.events)||raw.events.length>4||!Array.isArray(raw.acknowledged)||raw.acknowledged.length!==events.length)fail('The sync reply was incomplete. Your changes are still saved on this phone.');
   return {...raw,events:raw.events.map(validateEvent),acknowledged:raw.acknowledged.map(validateEvent)};
 }
@@ -78,7 +79,7 @@ async function syncNow() {
     syncError='';syncFailures=0;syncRetryAt=0;
   } catch(error) {
     syncFailures++;syncRetryAt=Date.now()+Math.min(60000,5000*2**Math.min(syncFailures-1,4));
-    syncError=/family link/.test(error.message)?'Connection needs attention. Reopen your private family link.':'Saved on this phone · connection interrupted, retrying automatically';
+    syncError=/update/i.test(error.message)?error.message:/family link/.test(error.message)?'Connection needs attention. Reopen your private family link.':'Saved on this phone · connection interrupted, retrying automatically';
   } finally {syncBusy=false;syncStatus();if(again)scheduleSync(100);}
 }
 async function setupSync() {
