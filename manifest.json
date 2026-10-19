@@ -1,13 +1,13 @@
 {
-  "name": "Eshels Baby App",
-  "short_name": "Eshels Baby",
+  "name": "Eshel’s baby app",
+  "short_name": "Eshel’s baby",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#FFF9F5",
-  "theme_color": "#FFF9F5",
+  "orientation": "any",
+  "background_color": "#F8F7FC",
+  "theme_color": "#F8F7FC",
   "icons": [
     { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

@@ -8,6 +8,7 @@ function syncStatus() {
     : !navigator.onLine ? `Offline · ${pending ? pending+' changes waiting' : 'saved on this phone'}`
     : syncError || (syncBusy ? 'Syncing your family’s moments…' : pending ? `${pending} changes waiting to sync` : state.settings.lastSyncAt ? 'Connected · syncing automatically' : 'Connecting…');
   for(const node of document.querySelectorAll('[data-sync-status]'))node.textContent=text;
+  for(const node of document.querySelectorAll('[data-sync-compact]'))node.textContent=!state.sync?'Connect family':!navigator.onLine?'Saved offline':syncError?'Check connection':pending?'Syncing moments':'Family connected';
 }
 function scheduleSync(delay=250) {
   clearTimeout(syncTimer);

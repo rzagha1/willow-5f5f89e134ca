@@ -1,8 +1,8 @@
-# Eshels Baby App
+# Eshel’s baby app
 
 [Open the app](https://rzagha1.github.io/willow-5f5f89e134ca/) · [Repository](https://github.com/rzagha1/willow-5f5f89e134ca)
 
-A small baby tracker for your family. The phone app uses vanilla HTML, CSS, and JavaScript with no build step, external fonts, analytics, or runtime libraries. It saves locally first. Paired phones automatically exchange entries through your private Cloudflare Worker and D1 database.
+A small baby tracker for your family. The phone app uses vanilla HTML, CSS, and JavaScript with no build step, third-party font requests, analytics, or runtime libraries. Its 31 KB Nunito Sans font is bundled locally and cached for offline use; the font license is in `fonts/OFL.txt`. It saves locally first. Paired phones automatically exchange entries through your private Cloudflare Worker and D1 database.
 
 ## Connect both phones once
 
@@ -17,10 +17,12 @@ The link contains a secret access key. Anyone with it can read and change your f
 
 ## Daily use
 
-- **Sleep:** Home shows time since the baby last **woke up**, using the latest sleep end time. Open the soft lavender sleep sheet for a large timer, editable start/end times, notes, and Add Photo. **Pause** freezes the total during a brief wake-up; **Resume** continues the same sleep without resetting. Awake breaks are excluded from the timer, history, and daily totals. **Stop** finishes the sleep; if already paused, the end time is when the pause began. Running and paused timers survive closing, offline use, and restarting the app. Tap **Save** to save edits and close. **Manual entry** opens both date/time fields. Photos are resized and saved as JPEGs. The sheet follows the phone’s selected light/dark theme.
+Version **1.3.0** gives Home, Timeline, Settings, onboarding, and every logging/connection sheet the same rounded typography, violet actions, category colors, navigation, fields, and feedback. Light/dark themes, keyboard focus, reduced motion, and large text are supported throughout.
+
+- **Sleep:** Home shows time since the baby last **woke up**, using the latest sleep end time. Open the soft lavender sleep sheet for a large timer, editable start/end times, notes, and Add photo. **Pause** freezes the total during a brief wake-up; **Resume** continues the same sleep without resetting. Awake breaks are excluded from the timer, history, and daily totals. **Stop** finishes the sleep; if already paused, the end time is when the pause began. Running and paused timers survive closing, offline use, and restarting the app. Tap **Save** to save edits and close. **Manual entry** opens both date/time fields. Photos are resized and saved as JPEGs. The sheet follows the phone’s selected light/dark theme.
 - **Feed:** breast left/right timers, bottle amount and unit, or solids with a note. Expand **Now** to log an earlier time.
 - **Diaper:** Wet, Dirty, or Both saves immediately. Undo is available briefly. **Add details** lets you add a note or an earlier time.
-- **Misc:** choose a quick label or enter your own.
+- **Moments:** choose a quick label or name your own. The selected label stays visibly checked until you change it.
 - **Timeline:** tap an entry to edit or delete it. Sleep entries show their start and end times (or In progress), alongside duration and notes. Sleep spanning midnight includes dates and appears on each affected day; daily totals include only that day's duration.
 - **Settings:** names, bottle unit, clock, theme, family connection, backups, and CSV export. Each phone keeps its own preferences.
 
@@ -45,6 +47,7 @@ Browser storage can be cleared by the user or operating system. IndexedDB is pri
 Keep these files at the existing GitHub Pages repository root:
 
 - `index.html`, `styles.css`, `app.js`, `event-data.js`
+- `fonts/nunito-sans-latin.woff2`, `fonts/OFL.txt`
 - `sync-config.js`, `sync.js`, `sw.js`, `manifest.json`
 - `icon-192.png`, `icon-512.png`, `icon-512-maskable.png`
 
@@ -66,7 +69,7 @@ References: [D1 prepared statements and transactions](https://developers.cloudfl
 
 ## Ship an app update
 
-1. Run the relevant checks below. Update `VERSION` in `app.js` and `CACHE_VERSION` in `sw.js` together.
+1. Run the relevant checks below. Update `VERSION` in `app.js` and `CACHE_VERSION` in `sw.js` together. For **1.3.0**, include the `fonts/` directory; the service worker pre-caches the font. The 1.2.0 sync backend already supports this interface release.
 2. For **1.2.0**, first deploy the updated Worker with `npm run deploy --prefix cloudflare`. Its shared event validator preserves pause intervals. Sync protocol 2 rejects older clients before they can overwrite pause history; local entries stay saved until the phone is updated. No D1 schema migration is needed.
 3. Upload the changed hosting files and `sw.js` to the existing repository's `main` branch. GitHub Pages stays set to `main` / root. Never upload baby data, family keys, OAuth credentials, or `.dev.vars`.
 4. After Pages publishes, open the installed app online **on both phones** and tap **Update available, tap to refresh**. The app reloads; local entries, preferences, pairing, and queued changes remain.
@@ -80,13 +83,16 @@ python3 -m http.server 8765 --bind 127.0.0.1
 node tests/browser.cjs
 node tests/edge-cases.cjs
 node tests/sleep-timing.cjs
+node tests/unified-ui.cjs
 npm ci --prefix cloudflare
 node tests/automatic-sync.cjs
 ```
 
 Open `http://127.0.0.1:8765/`. The browser tests use an already installed Playwright. The automatic-sync test creates a disposable local D1 database, starts Wrangler's actual Worker runtime, serves an isolated copy of the app, and links two independent browser stores using a test-only key. It never uses the production family/database. These are development tools; the phone app has no Node/npm requirement.
 
-Checks cover wake-based gaps; repeated pauses/resumes; stop-while-paused end times; pause history in daily totals, backups, CSV, and two-phone sync; old-client rejection; all logging types; sleep timer/edit/photo controls; themes; responsive sheets and large text; Back/Escape/focus behavior; backup/CSV/restore; legacy import validation; midnight/DST; offline reload; service-worker updates retaining data; storage fallback/failures; automatic two-phone updates; offline queue replay; simultaneous edits; deletions; pagination; request retries; authentication and CORS. Screenshots are in `artifacts/`.
+The interface checks cover 11 screen/sheet states in both themes at phone, tablet, desktop, landscape, and 200% text sizes, plus text contrast, touch targets, selected states, keyboard focus, pending/error feedback, and offline font loading.
+
+Other checks cover wake-based gaps; repeated pauses/resumes; stop-while-paused end times; pause history in daily totals, backups, CSV, and two-phone sync; old-client rejection; all logging types; sleep timer/edit/photo controls; themes; responsive sheets and large text; Back/Escape/focus behavior; backup/CSV/restore; legacy import validation; midnight/DST; offline reload; service-worker updates retaining data; storage fallback/failures; automatic two-phone updates; offline queue replay; simultaneous edits; deletions; pagination; request retries; authentication and CORS. Screenshots are in `artifacts/`.
 
 ## Physical phone checks
 
